@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 from typing import Iterable, Literal, Sequence
 
-import anyio
+import asyncio
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field
 
@@ -258,11 +258,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     server = create_server(**server_kwargs)
 
     if args.transport == "stdio":
-        anyio.run(server.run_stdio_async)
+        asyncio.run(server.run_stdio_async())
     elif args.transport == "sse":
-        anyio.run(server.run_sse_async, args.mount_path)
+        asyncio.run(server.run_sse_async(args.mount_path))
     else:
-        anyio.run(server.run_streamable_http_async)
+        asyncio.run(server.run_streamable_http_async())
 
     return 0
 

@@ -8,8 +8,8 @@ context building pipeline inside any project without depending on the rest of ai
 ## Installation
 
 ```bash
-# Install directly from the subdirectory in this repository
-python -m pip install ./repomap_tool
+# Install directly from the repository root
+python -m pip install .
 ```
 
 The package bundles the Tree-sitter query data files so no extra setup is required.
@@ -42,7 +42,7 @@ you can invoke repo map generation directly from MCP-compatible clients such as 
 
 ```bash
 # Install the package (and the MCP entrypoint) from this repository
-uv tool install --python 3.12 ./repomap_tool
+uv tool install --python 3.12 .
 
 # Run the MCP server on stdio
 repomap-mcp --transport stdio

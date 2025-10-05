@@ -29,7 +29,7 @@ repomap-mcp = "repomap_tool.mcp.server:main"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["repomap_tool"]
+include = ["repomap_tool", "repomap_tool.*"]
 
 [build-system]
 requires = ["setuptools>=68"]

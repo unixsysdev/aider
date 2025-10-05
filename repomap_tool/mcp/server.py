@@ -16,6 +16,7 @@ from ..service import RepoMapBuilder
 RefreshMode = Literal["auto", "always", "files", "manual"]
 
 _DEFAULT_ROOT: Path | None = None
+_LOG_LEVELS: tuple[str, ...] = ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG")
 
 
 class RankedTag(BaseModel):
@@ -26,6 +27,16 @@ class RankedTag(BaseModel):
     line: int = Field(description="Line number where the symbol occurs.")
     name: str = Field(description="Identifier that was ranked.")
     kind: str = Field(description="Symbol type emitted by the repo map engine.")
+
+
+def _normalise_log_level(value: str | None) -> str:
+    if value is None:
+        return "INFO"
+
+    candidate = value.upper()
+    if candidate not in _LOG_LEVELS:
+        raise ValueError(f"Invalid log level: {value}")
+    return candidate
 
 
 def _set_default_root(root: Path | None) -> None:
@@ -213,7 +224,12 @@ def register_tools(server: FastMCP) -> FastMCP:
     return server
 
 
-def create_server(*, default_root: str | Path | None = None, **kwargs) -> FastMCP:
+def create_server(
+    *,
+    default_root: str | Path | None = None,
+    log_level: str | None = None,
+    **kwargs,
+) -> FastMCP:
     """Create a :class:`FastMCP` server with the repo map tools registered."""
 
     if default_root is not None:
@@ -229,6 +245,7 @@ def create_server(*, default_root: str | Path | None = None, **kwargs) -> FastMC
             "Pass chat files, inline context, or explicit mentions to focus the output."
         ),
         website_url="https://github.com/unixsysdev/repomap",
+        log_level=_normalise_log_level(log_level),
         **kwargs,
     )
     return register_tools(server)
@@ -271,6 +288,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "(defaults to the current working directory)."
         ),
     )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        type=_normalise_log_level,
+        choices=_LOG_LEVELS,
+        help="Log level for MCP diagnostics (defaults to INFO).",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable FastMCP debug mode (implies additional logging).",
+    )
     return parser
 
 
@@ -289,7 +318,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    server = create_server(default_root=default_root, **server_kwargs)
+    server = create_server(
+        default_root=default_root,
+        log_level=args.log_level,
+        debug=args.debug,
+        **server_kwargs,
+    )
 
     if args.transport == "stdio":
         message = "repomap-mcp awaiting MCP client handshake on stdio"
@@ -306,14 +340,18 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
     if default_root is not None:
         message = f"{message} (default repository root: {default_root})"
-    print(message, file=sys.stderr)
+    print(message, file=sys.stderr, flush=True)
 
-    if args.transport == "stdio":
-        anyio.run(server.run_stdio_async)
-    elif args.transport == "sse":
-        anyio.run(server.run_sse_async, args.mount_path)
-    else:
-        anyio.run(server.run_streamable_http_async)
+    try:
+        if args.transport == "stdio":
+            anyio.run(server.run_stdio_async)
+        elif args.transport == "sse":
+            anyio.run(server.run_sse_async, args.mount_path)
+        else:
+            anyio.run(server.run_streamable_http_async)
+    except KeyboardInterrupt:
+        print("repomap-mcp interrupted by user", file=sys.stderr, flush=True)
+        return 130
 
     return 0
 

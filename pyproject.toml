@@ -1,51 +1,34 @@
-
 [project]
-name = "aider-chat"
-description = "Aider is AI pair programming in your terminal"
+name = "repomap-tool"
+description = "Standalone repository map generator extracted from the aider project"
 readme = "README.md"
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python",
-    "Topic :: Software Development",
+license = { file = "../LICENSE.txt" }
+authors = [{ name = "Aider Developers" }]
+requires-python = ">=3.10"
+version = "0.1.0"
+dependencies = [
+    "diskcache>=5.6",
+    "GitPython>=3.1",
+    "grep-ast>=0.4",
+    "networkx<3.5",
+    "scipy<1.16",
+    "pygments>=2.16",
+    "tqdm>=4.64",
+    "tree-sitter-languages>=1.10.2",
 ]
-requires-python = ">=3.10,<3.13"
-dynamic = ["dependencies", "optional-dependencies", "version"]
 
 [project.urls]
-Homepage = "https://github.com/Aider-AI/aider"
+Homepage = "https://github.com/Aider-AI/aider/tree/main/repomap_tool"
 
 [project.scripts]
-aider = "aider.main:main"
-
-[tool.setuptools.dynamic]
-dependencies = { file = "requirements.txt" }
-
-[tool.setuptools.dynamic.optional-dependencies]
-dev = { file = "requirements/requirements-dev.txt" }
-help = { file = "requirements/requirements-help.txt" }
-browser = { file = "requirements/requirements-browser.txt" }
-playwright = { file = "requirements/requirements-playwright.txt" }
+repomap-tool = "repomap_tool.cli:main"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["aider"]
+include = ["repomap_tool"]
 
 [build-system]
-requires = ["setuptools>=68", "setuptools_scm[toml]>=8"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
-
-[tool.setuptools_scm]
-write_to = "aider/_version.py"
-
-[tool.codespell]
-skip = "*.svg,Gemfile.lock,tests/fixtures/*,aider/website/assets/*"
-write-changes = true

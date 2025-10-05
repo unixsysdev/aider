@@ -15,6 +15,7 @@ dependencies = [
     "pygments>=2.16",
     "tqdm>=4.64",
     "tree-sitter-languages>=1.10.2",
+    "mcp>=1.16",
 ]
 
 [project.urls]
@@ -22,6 +23,7 @@ Homepage = "https://github.com/unixsysdev/repomap.git"
 
 [project.scripts]
 repomap-tool = "repomap_tool.cli:main"
+repomap-mcp = "repomap_tool.mcp.server:main"
 
 [tool.setuptools]
 include-package-data = true

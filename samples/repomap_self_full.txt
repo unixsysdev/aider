@@ -10,8 +10,6 @@ repomap_tool/io.py:
 │    """Minimal IO facade used by the tests and spinner."""
 │
 ⋮
-│    def tool_warning(self, *messages: Any) -> None:  # noqa: D401
-⋮
 │    def read_text(self, fname: str) -> str:
 ⋮
 
@@ -29,6 +27,8 @@ repomap_tool/service.py:
 │class RepoMapConsoleIO:
 │    """Lightweight console IO adapter compatible with the underlying backend."""
 │
+⋮
+│    def tool_warning(self, *messages) -> None:
 ⋮
 │    def read_text(self, fname: str) -> str:
 ⋮

@@ -39,15 +39,6 @@ The snippets below showcase what the CLI produces when it analyzes this reposito
 example captures a different way to seed the scan so you can compare the ranking
 behaviour.
 
-To refresh the captured outputs and keep them in sync with the repository contents, run:
-
-```bash
-python scripts/generate_samples.py
-```
-
-Pass `--dry-run` to preview the commands or `--only repomap_self_full.txt` (for example)
-to limit generation to a subset of the samples.
-
 ### Full repository scan
 
 Command:

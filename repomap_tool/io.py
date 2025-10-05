@@ -1,4 +1,4 @@
-"""Minimal IO implementation used by the repomap tests."""
+"""Lightweight IO helpers for the repository map toolkit."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 
 
 class InputOutput:
-    """Lightweight stand-in for the chat IO helper."""
+    """Minimal IO facade used by the tests and spinner."""
 
     def __init__(self, verbose: bool = False, encoding: str = "utf-8") -> None:
         self.verbose = verbose

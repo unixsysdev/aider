@@ -27,7 +27,7 @@ repomap-tool = "repomap_tool.cli:main"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["repomap_tool", "aider"]
+include = ["repomap_tool"]
 
 [build-system]
 requires = ["setuptools>=68"]

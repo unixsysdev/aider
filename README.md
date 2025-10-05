@@ -8,8 +8,8 @@ context building pipeline inside any project without depending on the rest of ai
 ## Installation
 
 ```bash
-# Install directly from the subdirectory in this repository
-python -m pip install ./repomap_tool
+# Install directly from the repository root
+python -m pip install .
 ```
 
 The package bundles the Tree-sitter query data files so no extra setup is required.
@@ -32,6 +32,42 @@ Options include:
 - `--include` – add untracked files to the scan
 
 Run `repomap-tool --help` to see the complete list.
+
+## MCP server integration
+
+The toolkit also exposes a [Model Context Protocol](https://github.com/modelcontextprotocol) server so
+you can invoke repo map generation directly from MCP-compatible clients such as OpenAI Studio.
+
+### Install with `uv`
+
+```bash
+# Install the package (and the MCP entrypoint) from this repository
+uv tool install --python 3.12 .
+
+# Run the MCP server on stdio
+repomap-mcp --transport stdio
+```
+
+### Example `mcpservers.json`
+
+Add the server to your MCP configuration so Studio can launch it automatically. A minimal
+`mcpservers.json` entry looks like this:
+
+```json
+{
+  "servers": [
+    {
+      "name": "repomap",
+      "command": "repomap-mcp",
+      "args": [],
+      "transport": { "type": "stdio" }
+    }
+  ]
+}
+```
+
+Once registered, the `generate_repo_map` tool returns the exact same context blocks that power aider,
+and the `generate_ranked_tags` tool provides structured access to the ranked identifiers.
 
 ## Sample outputs
 

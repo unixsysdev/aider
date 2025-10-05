@@ -5,11 +5,12 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Iterable, Literal, Sequence
+from typing import Annotated, Iterable, Literal, Sequence
 
 import anyio
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field
+from mcp.types import ToolAnnotations
 
 from ..service import RepoMapBuilder
 
@@ -23,10 +24,18 @@ class RankedTag(BaseModel):
     """Structured representation of a ranked tag entry."""
 
     file: str = Field(description="Repository-relative path to the symbol's file.")
-    absolute_file: str = Field(description="Absolute path to the symbol's file.")
-    line: int = Field(description="Line number where the symbol occurs.")
-    name: str = Field(description="Identifier that was ranked.")
-    kind: str = Field(description="Symbol type emitted by the repo map engine.")
+    absolute_file: str | None = Field(
+        default=None, description="Absolute path to the symbol's file."
+    )
+    line: int | None = Field(
+        default=None, description="Line number where the symbol occurs."
+    )
+    name: str | None = Field(
+        default=None, description="Identifier that was ranked."
+    )
+    kind: str | None = Field(
+        default=None, description="Symbol type emitted by the repo map engine."
+    )
 
 
 def _normalise_log_level(value: str | None) -> str:
@@ -124,21 +133,126 @@ def _create_builder(
 
 def generate_repo_map_tool(
     *,
-    root: str | None = None,
-    chat_files: Sequence[str] | None = None,
-    context: str | None = None,
-    context_files: Sequence[str] | None = None,
-    mentioned_files: Sequence[str] | None = None,
-    mentioned_identifiers: Sequence[str] | None = None,
-    include_files: Sequence[str] | None = None,
-    map_tokens: int | None = None,
-    refresh: str | None = None,
-    force_refresh: bool = False,
-    model_name: str | None = None,
-    verbose: bool = False,
+    root: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Absolute or relative path to the repository root. Defaults to the "
+                "server's configured root or the current working directory."
+            )
+        ),
+    ] = None,
+    chat_files: Annotated[
+        Sequence[str] | None,
+        Field(
+            description=(
+                "Paths to files already surfaced in the conversation. Helps the map "
+                "builder prioritise nearby files."
+            )
+        ),
+    ] = None,
+    context: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Inline context that should influence ranking (for example a problem "
+                "statement or error message)."
+            )
+        ),
+    ] = None,
+    context_files: Annotated[
+        Sequence[str] | None,
+        Field(
+            description=(
+                "Paths to files whose contents should be concatenated and supplied as "
+                "additional context."
+            )
+        ),
+    ] = None,
+    mentioned_files: Annotated[
+        Sequence[str] | None,
+        Field(
+            description="Explicitly referenced file paths that warrant higher priority."
+        ),
+    ] = None,
+    mentioned_identifiers: Annotated[
+        Sequence[str] | None,
+        Field(
+            description=(
+                "Fully-qualified identifiers that should be emphasised when building "
+                "the map."
+            )
+        ),
+    ] = None,
+    include_files: Annotated[
+        Sequence[str] | None,
+        Field(
+            description=(
+                "Restrict the map to these repository-relative paths. Supports glob "
+                "patterns."
+            )
+        ),
+    ] = None,
+    map_tokens: Annotated[
+        int | None,
+        Field(
+            ge=0,
+            description=(
+                "Soft cap on the number of tokens that should be allocated to the "
+                "resulting map."
+            ),
+        ),
+    ] = None,
+    refresh: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Cache refresh strategy. Accepts 'auto', 'always', 'files', or 'manual'."
+            )
+        ),
+    ] = None,
+    force_refresh: Annotated[
+        bool,
+        Field(
+            description=(
+                "Skip cached data and rebuild the map even if it appears up to date."
+            )
+        ),
+    ] = False,
+    model_name: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Preferred LLM profile to use when estimating token budgets for the map."
+            )
+        ),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        Field(description="Emit verbose logging to aid troubleshooting."),
+    ] = False,
     ctx: Context | None = None,
 ) -> str:
-    """Generate a repository map identical to the aider workflow."""
+    """Generate a focused repository map for the requesting model.
+
+    This tool mirrors the behaviour of the ``repomap-tool`` CLI. Provide a repository
+    ``root`` and optional signals (chat history references, inline context, or
+    explicit mentions) to guide the ranking engine. The response is a string that is
+    ready to inject into a prompt without additional formatting.
+
+    Example call::
+
+        generate_repo_map(
+            root="/workspace/project",
+            chat_files=["src/app.py"],
+            context="Investigating failing login tests",
+            mentioned_identifiers=["auth.login"],
+        )
+
+    Returns:
+        str: A condensed, human-readable repository map covering the most relevant
+        files and symbols.
+    """
 
     root_path = _resolve_root(root)
     builder = _create_builder(root_path, map_tokens, _normalise_refresh(refresh), verbose, model_name)
@@ -161,21 +275,125 @@ def generate_repo_map_tool(
 
 def generate_ranked_tags_tool(
     *,
-    root: str | None = None,
-    chat_files: Sequence[str] | None = None,
-    context: str | None = None,
-    context_files: Sequence[str] | None = None,
-    mentioned_files: Sequence[str] | None = None,
-    mentioned_identifiers: Sequence[str] | None = None,
-    include_files: Sequence[str] | None = None,
-    map_tokens: int | None = None,
-    refresh: str | None = None,
-    model_name: str | None = None,
-    verbose: bool = False,
-    limit: int | None = None,
+    root: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Absolute or relative path to the repository root. Defaults to the "
+                "server's configured root or the current working directory."
+            )
+        ),
+    ] = None,
+    chat_files: Annotated[
+        Sequence[str] | None,
+        Field(
+            description=(
+                "Paths to files already surfaced in the conversation. Helps the tag "
+                "ranker emphasise nearby files."
+            )
+        ),
+    ] = None,
+    context: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Inline context that should influence scoring (for example a problem "
+                "statement or error message)."
+            )
+        ),
+    ] = None,
+    context_files: Annotated[
+        Sequence[str] | None,
+        Field(
+            description=(
+                "Paths to files whose contents should be concatenated and supplied as "
+                "additional context."
+            )
+        ),
+    ] = None,
+    mentioned_files: Annotated[
+        Sequence[str] | None,
+        Field(description="Explicitly referenced file paths that warrant higher priority."),
+    ] = None,
+    mentioned_identifiers: Annotated[
+        Sequence[str] | None,
+        Field(
+            description=(
+                "Fully-qualified identifiers that should be emphasised when ranking "
+                "symbols."
+            )
+        ),
+    ] = None,
+    include_files: Annotated[
+        Sequence[str] | None,
+        Field(
+            description=(
+                "Restrict the ranking to these repository-relative paths. Supports glob "
+                "patterns."
+            )
+        ),
+    ] = None,
+    map_tokens: Annotated[
+        int | None,
+        Field(
+            ge=0,
+            description=(
+                "Soft cap on the number of tokens that should be allocated to the map "
+                "produced from these tags."
+            ),
+        ),
+    ] = None,
+    refresh: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Cache refresh strategy. Accepts 'auto', 'always', 'files', or 'manual'."
+            )
+        ),
+    ] = None,
+    model_name: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Preferred LLM profile to use when estimating token budgets for the map."
+            )
+        ),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        Field(description="Emit verbose logging to aid troubleshooting."),
+    ] = False,
+    limit: Annotated[
+        int | None,
+        Field(
+            ge=0,
+            description=(
+                "Optional maximum number of ranked entries to return. Useful for "
+                "previews when the client only needs the highest scoring tags."
+            ),
+        ),
+    ] = None,
     ctx: Context | None = None,
 ) -> list[RankedTag]:
-    """Return the ranked tags that power the repo map."""
+    """Return structured ranked tags for advanced control over the repo map.
+
+    Call this tool when you need machine-readable details (file paths, symbol names,
+    and line numbers) describing the ranking that underpins ``generate_repo_map``.
+    The parameters mirror the map generator so that both tools can be driven with the
+    same signals.
+
+    Example call::
+
+        generate_ranked_tags(
+            root="/workspace/project",
+            mentioned_files=["src/auth.py"],
+            limit=5,
+        )
+
+    Returns:
+        list[RankedTag]: Each entry contains repository-relative and absolute file
+        paths along with optional identifier metadata if it was available.
+    """
 
     if limit is not None and limit < 0:
         raise ValueError("limit must be greater than or equal to zero")
@@ -195,16 +413,39 @@ def generate_ranked_tags_tool(
     if limit is not None:
         tags = tags[:limit]
 
-    return [
-        RankedTag(
-            file=tag.rel_fname,
-            absolute_file=tag.fname,
-            line=tag.line,
-            name=tag.name,
-            kind=tag.kind,
-        )
-        for tag in tags
-    ]
+    serialised: list[RankedTag] = []
+    for tag in tags:
+        if hasattr(tag, "rel_fname"):
+            serialised.append(
+                RankedTag(
+                    file=tag.rel_fname,
+                    absolute_file=tag.fname,
+                    line=tag.line,
+                    name=tag.name,
+                    kind=tag.kind,
+                )
+            )
+            continue
+
+        if isinstance(tag, Sequence) and not isinstance(tag, (str, bytes)) and tag:
+            rel_fname = str(tag[0])
+            file_path = Path(rel_fname)
+            if not file_path.is_absolute():
+                file_path = (builder.root / file_path).resolve()
+            serialised.append(
+                RankedTag(
+                    file=rel_fname,
+                    absolute_file=str(file_path),
+                )
+            )
+            continue
+
+        if ctx is not None:
+            ctx.warning(
+                "Encountered an unexpected ranked tag entry; omitting from response."
+            )
+
+    return serialised
 
 
 def register_tools(server: FastMCP) -> FastMCP:
@@ -212,12 +453,65 @@ def register_tools(server: FastMCP) -> FastMCP:
 
     server.tool(
         name="generate_repo_map",
-        description="Build a condensed repository map for the supplied project.",
+        title="Generate repository map",
+        description=(
+            "Build a condensed repository map for the supplied project. Provide the "
+            "repository root plus optional chat or context signals to focus the "
+            "result on the current task."
+        ),
+        annotations=ToolAnnotations(
+            title="Generate repository map",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+            usageExamples=[
+                {
+                    "description": "Map the current repository using chat history",
+                    "arguments": {
+                        "chat_files": ["src/app.py"],
+                        "context": "Investigating login failures",
+                    },
+                },
+                {
+                    "description": "Focus on a specific module",
+                    "arguments": {
+                        "mentioned_files": ["src/auth/login.py"],
+                        "include_files": ["src/auth/**"],
+                    },
+                },
+            ],
+        ),
     )(generate_repo_map_tool)
 
     server.tool(
         name="generate_ranked_tags",
-        description="Return the ranked identifiers used to construct the repository map.",
+        title="Inspect ranked tags",
+        description=(
+            "Return the ranked identifiers used to construct the repository map. Use "
+            "this when you need structured metadata like file paths, symbol names, "
+            "and line numbers."
+        ),
+        annotations=ToolAnnotations(
+            title="Inspect ranked tags",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+            usageExamples=[
+                {
+                    "description": "Preview the top ranked symbols",
+                    "arguments": {"limit": 5},
+                },
+                {
+                    "description": "Filter rankings to files mentioned in the chat",
+                    "arguments": {
+                        "chat_files": ["src/api/routes.py"],
+                        "mentioned_identifiers": ["api.routes.handle_request"],
+                    },
+                },
+            ],
+        ),
         structured_output=True,
     )(generate_ranked_tags_tool)
 
@@ -241,8 +535,12 @@ def create_server(
     server = FastMCP(
         name="repomap-tool",
         instructions=(
-            "Generate repository maps and ranked tags using repomap-tool. "
-            "Pass chat files, inline context, or explicit mentions to focus the output."
+            "Use repomap-tool to generate repository maps or inspect the ranked tags "
+            "behind them. Call 'generate_repo_map' when you want a ready-to-share "
+            "map string; call 'generate_ranked_tags' when you need structured "
+            "metadata for downstream processing. Supply a repository root when "
+            "working outside the default, and pass chat, context, or mention "
+            "signals to focus the ranking on the current task."
         ),
         website_url="https://github.com/unixsysdev/repomap",
         log_level=_normalise_log_level(log_level),

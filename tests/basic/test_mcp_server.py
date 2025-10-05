@@ -60,8 +60,10 @@ def test_generate_ranked_tags_tool(tmp_path):
     assert tags, "Expected ranked tags to be returned"
     first = tags[0]
     assert first.file.endswith(".py")
-    assert isinstance(first.line, int)
-    assert first.name
+    if first.name is not None:
+        assert isinstance(first.line, int)
+    else:
+        assert first.line is None
 
 
 def test_create_server_registers_tools():

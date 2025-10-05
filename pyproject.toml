@@ -1,9 +1,9 @@
 [project]
 name = "repomap-tool"
-description = "Standalone repository map generator extracted from the aider project"
+description = "Standalone repository map generator"
 readme = "README.md"
 license = { file = "../LICENSE.txt" }
-authors = [{ name = "Aider Developers" }]
+authors = [{ name = "BigJimmy" }]
 requires-python = ">=3.10"
 version = "0.1.0"
 dependencies = [
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Aider-AI/aider/tree/main/repomap_tool"
+Homepage = "https://github.com/unixsysdev/repomap.git"
 
 [project.scripts]
 repomap-tool = "repomap_tool.cli:main"

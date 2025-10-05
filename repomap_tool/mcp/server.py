@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Iterable, Literal, Sequence
 
@@ -13,6 +14,9 @@ from pydantic import BaseModel, Field
 from ..service import RepoMapBuilder
 
 RefreshMode = Literal["auto", "always", "files", "manual"]
+
+_DEFAULT_ROOT: Path | None = None
+_LOG_LEVELS: tuple[str, ...] = ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG")
 
 
 class RankedTag(BaseModel):
@@ -25,8 +29,30 @@ class RankedTag(BaseModel):
     kind: str = Field(description="Symbol type emitted by the repo map engine.")
 
 
-def _resolve_root(root: str | None) -> Path:
-    candidate = Path(root).expanduser() if root else Path.cwd()
+def _normalise_log_level(value: str | None) -> str:
+    if value is None:
+        return "INFO"
+
+    candidate = value.upper()
+    if candidate not in _LOG_LEVELS:
+        raise ValueError(f"Invalid log level: {value}")
+    return candidate
+
+
+def _set_default_root(root: Path | None) -> None:
+    global _DEFAULT_ROOT
+    _DEFAULT_ROOT = root
+
+
+def _resolve_root(root: str | Path | None) -> Path:
+    if root is None:
+        if _DEFAULT_ROOT is not None:
+            candidate = _DEFAULT_ROOT
+        else:
+            candidate = Path.cwd()
+    else:
+        candidate = Path(root).expanduser() if not isinstance(root, Path) else root
+
     try:
         resolved = candidate.resolve()
     except FileNotFoundError as exc:  # pragma: no cover - mirrors pathlib behaviour
@@ -198,8 +224,19 @@ def register_tools(server: FastMCP) -> FastMCP:
     return server
 
 
-def create_server(**kwargs) -> FastMCP:
+def create_server(
+    *,
+    default_root: str | Path | None = None,
+    log_level: str | None = None,
+    **kwargs,
+) -> FastMCP:
     """Create a :class:`FastMCP` server with the repo map tools registered."""
+
+    if default_root is not None:
+        resolved = _resolve_root(default_root)
+    else:
+        resolved = None
+    _set_default_root(resolved)
 
     server = FastMCP(
         name="repomap-tool",
@@ -208,6 +245,7 @@ def create_server(**kwargs) -> FastMCP:
             "Pass chat files, inline context, or explicit mentions to focus the output."
         ),
         website_url="https://github.com/unixsysdev/repomap",
+        log_level=_normalise_log_level(log_level),
         **kwargs,
     )
     return register_tools(server)
@@ -242,6 +280,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional mount path for the SSE transport (defaults to the configured mount path).",
     )
+    parser.add_argument(
+        "--root",
+        default=None,
+        help=(
+            "Repository root to use when tool requests omit the root parameter "
+            "(defaults to the current working directory)."
+        ),
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        type=_normalise_log_level,
+        choices=_LOG_LEVELS,
+        help="Log level for MCP diagnostics (defaults to INFO).",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable FastMCP debug mode (implies additional logging).",
+    )
     return parser
 
 
@@ -255,14 +313,45 @@ def main(argv: Iterable[str] | None = None) -> int:
     if args.port is not None:
         server_kwargs["port"] = args.port
 
-    server = create_server(**server_kwargs)
+    try:
+        default_root = _resolve_root(args.root) if args.root is not None else None
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    server = create_server(
+        default_root=default_root,
+        log_level=args.log_level,
+        debug=args.debug,
+        **server_kwargs,
+    )
 
     if args.transport == "stdio":
-        anyio.run(server.run_stdio_async)
+        message = "repomap-mcp awaiting MCP client handshake on stdio"
     elif args.transport == "sse":
-        anyio.run(server.run_sse_async, args.mount_path)
+        mount_path = args.mount_path or server.settings.mount_path
+        message = (
+            "repomap-mcp serving SSE transport at "
+            f"http://{server.settings.host}:{server.settings.port}{mount_path}"
+        )
     else:
-        anyio.run(server.run_streamable_http_async)
+        message = (
+            "repomap-mcp serving streamable HTTP transport at "
+            f"http://{server.settings.host}:{server.settings.port}{server.settings.streamable_http_path}"
+        )
+    if default_root is not None:
+        message = f"{message} (default repository root: {default_root})"
+    print(message, file=sys.stderr, flush=True)
+
+    try:
+        if args.transport == "stdio":
+            anyio.run(server.run_stdio_async)
+        elif args.transport == "sse":
+            anyio.run(server.run_sse_async, args.mount_path)
+        else:
+            anyio.run(server.run_streamable_http_async)
+    except KeyboardInterrupt:
+        print("repomap-mcp interrupted by user", file=sys.stderr, flush=True)
+        return 130
 
     return 0
 

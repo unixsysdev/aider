@@ -4,10 +4,14 @@ from pathlib import Path
 
 import git
 
+import pytest
+
 from repomap_tool.mcp.server import (
+    build_arg_parser,
     create_server,
     generate_ranked_tags_tool,
     generate_repo_map_tool,
+    main,
 )
 
 
@@ -65,4 +69,51 @@ def test_create_server_registers_tools():
     tool_names = {tool.name for tool in server._tool_manager.list_tools()}
 
     assert {"generate_repo_map", "generate_ranked_tags"}.issubset(tool_names)
+
+
+def test_generate_repo_map_tool_uses_default_root(tmp_path):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _seed_repository(repo_root)
+
+    try:
+        create_server(default_root=repo_root)
+        result = generate_repo_map_tool()
+    finally:
+        create_server(default_root=None)
+
+    assert "alpha.py" in result
+    assert "beta.py" in result
+
+
+def test_create_server_respects_log_level():
+    server = create_server(log_level="debug")
+
+    assert server.settings.log_level == "DEBUG"
+
+
+def test_create_server_rejects_invalid_log_level():
+    with pytest.raises(ValueError):
+        create_server(log_level="nope")
+
+
+def test_build_arg_parser_normalises_log_level():
+    parser = build_arg_parser()
+    args = parser.parse_args(["--log-level", "debug"])
+
+    assert args.log_level == "DEBUG"
+
+
+def test_main_handles_keyboard_interrupt(monkeypatch, capsys):
+    def fake_run(*_args, **_kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("repomap_tool.mcp.server.anyio.run", fake_run)
+
+    exit_code = main(["--transport", "stdio"])
+
+    captured = capsys.readouterr()
+    assert "awaiting MCP client handshake on stdio" in captured.err
+    assert "interrupted by user" in captured.err
+    assert exit_code == 130
 

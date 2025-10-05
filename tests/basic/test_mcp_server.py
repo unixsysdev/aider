@@ -66,3 +66,18 @@ def test_create_server_registers_tools():
 
     assert {"generate_repo_map", "generate_ranked_tags"}.issubset(tool_names)
 
+
+def test_generate_repo_map_tool_uses_default_root(tmp_path):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _seed_repository(repo_root)
+
+    try:
+        create_server(default_root=repo_root)
+        result = generate_repo_map_tool()
+    finally:
+        create_server(default_root=None)
+
+    assert "alpha.py" in result
+    assert "beta.py" in result
+

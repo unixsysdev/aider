@@ -18,3 +18,4 @@ recursive-exclude aider/website/assets *
 recursive-exclude aider/website *.js
 recursive-exclude aider/website *.html
 recursive-exclude aider/website *.yml
+

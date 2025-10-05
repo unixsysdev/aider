@@ -1,0 +1,5 @@
+global-exclude *.py[cod]
+global-exclude __pycache__
+recursive-include repomap_tool/queries *
+include README.md
+include ../LICENSE.txt

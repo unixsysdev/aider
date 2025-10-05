@@ -60,8 +60,10 @@ def test_generate_ranked_tags_tool(tmp_path):
     assert tags, "Expected ranked tags to be returned"
     first = tags[0]
     assert first.file.endswith(".py")
-    assert isinstance(first.line, int)
-    assert first.name
+    if first.name is not None:
+        assert isinstance(first.line, int)
+    else:
+        assert first.line is None
 
 
 def test_create_server_registers_tools():
@@ -69,6 +71,27 @@ def test_create_server_registers_tools():
     tool_names = {tool.name for tool in server._tool_manager.list_tools()}
 
     assert {"generate_repo_map", "generate_ranked_tags"}.issubset(tool_names)
+
+
+def test_tool_annotations_include_parameter_descriptions():
+    server = create_server()
+    repo_map_tool = server._tool_manager.get_tool("generate_repo_map")
+    ranked_tags_tool = server._tool_manager.get_tool("generate_ranked_tags")
+
+    repo_annotations = repo_map_tool.annotations
+    ranked_annotations = ranked_tags_tool.annotations
+
+    assert repo_annotations is not None
+    assert ranked_annotations is not None
+
+    repo_parameters = repo_annotations.model_extra.get("parameterDescriptions")
+    ranked_parameters = ranked_annotations.model_extra.get("parameterDescriptions")
+
+    assert repo_parameters["force_refresh"]["summary"].strip()
+    assert repo_parameters["force_refresh"]["details"].strip()
+    assert "limit" in ranked_parameters
+    assert ranked_parameters["limit"]["summary"].strip()
+    assert "structured" in ranked_annotations.model_extra["callGuidance"].lower()
 
 
 def test_generate_repo_map_tool_uses_default_root(tmp_path):

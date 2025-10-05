@@ -20,6 +20,118 @@ _DEFAULT_ROOT: Path | None = None
 _LOG_LEVELS: tuple[str, ...] = ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG")
 
 
+# Guidance surfaced through ToolAnnotations to enrich MCP metadata presented to LLMs.
+_SHARED_PARAMETER_DESCRIPTIONS: dict[str, dict[str, str]] = {
+    "root": {
+        "summary": "Repository root directory.",
+        "details": (
+            "Absolute or relative path pointing at the repository to analyse."
+            " Defaults to the server's configured root or the current working"
+            " directory when omitted."
+        ),
+        "tips": "Set this when the conversation spans multiple repositories or sandboxes.",
+    },
+    "chat_files": {
+        "summary": "Files already surfaced in the chat.",
+        "details": (
+            "Repository-relative paths that have appeared in the conversation."
+            " The ranking engine boosts nearby files to extend the current thread."
+        ),
+        "tips": "Provide when follow-up questions refer to code previously pasted in the chat.",
+    },
+    "context": {
+        "summary": "Inline natural-language context.",
+        "details": (
+            "Problem statements, stack traces, or user goals that should shape"
+            " the generated map."
+        ),
+        "tips": "Keep concise but descriptive; long context can dilute the most relevant signals.",
+    },
+    "context_files": {
+        "summary": "Paths to additional context files.",
+        "details": (
+            "Each file is read, concatenated, and fed to the ranking engine as"
+            " supplementary context."
+        ),
+        "tips": "Useful for design docs or test logs that live alongside the code base.",
+    },
+    "mentioned_files": {
+        "summary": "Explicitly referenced files.",
+        "details": (
+            "Repository-relative paths to emphasise. Files listed here receive"
+            " a strong priority boost regardless of other signals."
+        ),
+        "tips": "Add files the user asked about even if they have not appeared in chat yet.",
+    },
+    "mentioned_identifiers": {
+        "summary": "Important identifiers to prioritise.",
+        "details": (
+            "Fully qualified function, class, or constant names that should rank"
+            " highly when present in the repository."
+        ),
+        "tips": "Match the repository's import style (for example `pkg.module.symbol`).",
+    },
+    "include_files": {
+        "summary": "Restrict search scope with globs.",
+        "details": (
+            "List of repository-relative files or glob patterns that limit analysis"
+            " to specific areas (for example `src/app/**`)."
+        ),
+        "tips": "Use when the task targets a subsystem and broader context would be noisy.",
+    },
+    "map_tokens": {
+        "summary": "Token budget hint for the resulting map.",
+        "details": (
+            "Soft maximum number of tokens the map should consume. Helps balance"
+            " breadth versus depth."
+        ),
+        "tips": "Lower the value when downstream prompts have strict token limits.",
+    },
+    "refresh": {
+        "summary": "Cache refresh strategy.",
+        "details": (
+            "Choose between 'auto', 'always', 'files', or 'manual' to control"
+            " how cached repository analysis is reused."
+        ),
+        "tips": "Use 'always' after large refactors; prefer 'files' when only a few files changed.",
+    },
+    "model_name": {
+        "summary": "Preferred LLM profile for token heuristics.",
+        "details": (
+            "Adjusts token estimation for repositories tuned to a specific model"
+            " (for example `gpt-4.1-mini`)."
+        ),
+        "tips": "Only set if the deployment's token accounting deviates from the default assumptions.",
+    },
+    "verbose": {
+        "summary": "Toggle verbose diagnostic logging.",
+        "details": "Enables additional logging in the MCP server for troubleshooting.",
+        "tips": "Use sparingly; verbose logs can overwhelm limited transports like stdio.",
+    },
+}
+
+_REPO_MAP_PARAMETER_DESCRIPTIONS: dict[str, dict[str, str]] = {
+    **_SHARED_PARAMETER_DESCRIPTIONS,
+    "force_refresh": {
+        "summary": "Bypass cached analysis.",
+        "details": "Force a rebuild of the repository map even if cached data appears fresh.",
+        "tips": "Set to true after major dependency or configuration changes.",
+    },
+}
+
+_RANKED_TAG_PARAMETER_DESCRIPTIONS: dict[str, dict[str, str]] = {
+    **_SHARED_PARAMETER_DESCRIPTIONS,
+    "limit": {
+        "summary": "Maximum number of ranked entries to return.",
+        "details": (
+            "Truncate the ranked tag list to this many items. Useful for previews"
+            " or when only the highest scoring symbols are needed."
+        ),
+        "tips": "Leave unset to receive the full ranking for downstream processing.",
+    },
+}
+
+
 class RankedTag(BaseModel):
     """Structured representation of a ranked tag entry."""
 
@@ -465,6 +577,12 @@ def register_tools(server: FastMCP) -> FastMCP:
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,
+            callGuidance=(
+                "Use when you need a ready-to-share textual overview of the current"
+                " repository. Supply chat and context signals to steer the ranking"
+                " toward the active issue, and prefer the ranked-tag tool if you"
+                " require machine-readable symbol metadata."
+            ),
             usageExamples=[
                 {
                     "description": "Map the current repository using chat history",
@@ -481,6 +599,7 @@ def register_tools(server: FastMCP) -> FastMCP:
                     },
                 },
             ],
+            parameterDescriptions=_REPO_MAP_PARAMETER_DESCRIPTIONS,
         ),
     )(generate_repo_map_tool)
 
@@ -498,6 +617,12 @@ def register_tools(server: FastMCP) -> FastMCP:
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,
+            callGuidance=(
+                "Choose this tool when you need structured data about the ranked"
+                " symbols behind the repository map, such as file paths, line"
+                " numbers, or to drive custom visualisations. For a conversational"
+                " overview, prefer 'generate_repo_map'."
+            ),
             usageExamples=[
                 {
                     "description": "Preview the top ranked symbols",
@@ -511,6 +636,7 @@ def register_tools(server: FastMCP) -> FastMCP:
                     },
                 },
             ],
+            parameterDescriptions=_RANKED_TAG_PARAMETER_DESCRIPTIONS,
         ),
         structured_output=True,
     )(generate_ranked_tags_tool)

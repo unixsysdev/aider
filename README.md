@@ -42,7 +42,7 @@ you can invoke repo map generation directly from MCP-compatible clients such as 
 
 ```bash
 # Install the package (and the MCP entrypoint) from this repository
-uv tool install --python 3.12 ./repomap_tool
+uv tool install --python 3.12 .
 
 # Run the MCP server on stdio
 repomap-mcp --transport stdio

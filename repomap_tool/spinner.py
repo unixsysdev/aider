@@ -13,11 +13,26 @@ Use it like:
     spinner.stop()
 """
 
+import shutil
 import sys
 import threading
 import time
 
-from rich.console import Console
+try:  # pragma: no cover - optional rich dependency
+    from rich.console import Console
+except ImportError:  # pragma: no cover - exercised implicitly in tests
+    class Console:  # type: ignore[override]
+        """Minimal fallback console when ``rich`` is unavailable."""
+
+        def __init__(self, *args, **kwargs) -> None:  # noqa: D401,ARG002
+            pass
+
+        @property
+        def width(self) -> int:  # noqa: D401
+            return shutil.get_terminal_size((80, 20)).columns
+
+        def show_cursor(self, *_args: object, **_kwargs: object) -> None:  # noqa: D401
+            return
 
 
 class Spinner:

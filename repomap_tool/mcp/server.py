@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Iterable, Literal, Sequence
 
@@ -13,6 +14,8 @@ from pydantic import BaseModel, Field
 from ..service import RepoMapBuilder
 
 RefreshMode = Literal["auto", "always", "files", "manual"]
+
+_DEFAULT_ROOT: Path | None = None
 
 
 class RankedTag(BaseModel):
@@ -25,8 +28,20 @@ class RankedTag(BaseModel):
     kind: str = Field(description="Symbol type emitted by the repo map engine.")
 
 
-def _resolve_root(root: str | None) -> Path:
-    candidate = Path(root).expanduser() if root else Path.cwd()
+def _set_default_root(root: Path | None) -> None:
+    global _DEFAULT_ROOT
+    _DEFAULT_ROOT = root
+
+
+def _resolve_root(root: str | Path | None) -> Path:
+    if root is None:
+        if _DEFAULT_ROOT is not None:
+            candidate = _DEFAULT_ROOT
+        else:
+            candidate = Path.cwd()
+    else:
+        candidate = Path(root).expanduser() if not isinstance(root, Path) else root
+
     try:
         resolved = candidate.resolve()
     except FileNotFoundError as exc:  # pragma: no cover - mirrors pathlib behaviour
@@ -198,8 +213,14 @@ def register_tools(server: FastMCP) -> FastMCP:
     return server
 
 
-def create_server(**kwargs) -> FastMCP:
+def create_server(*, default_root: str | Path | None = None, **kwargs) -> FastMCP:
     """Create a :class:`FastMCP` server with the repo map tools registered."""
+
+    if default_root is not None:
+        resolved = _resolve_root(default_root)
+    else:
+        resolved = None
+    _set_default_root(resolved)
 
     server = FastMCP(
         name="repomap-tool",
@@ -242,6 +263,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional mount path for the SSE transport (defaults to the configured mount path).",
     )
+    parser.add_argument(
+        "--root",
+        default=None,
+        help=(
+            "Repository root to use when tool requests omit the root parameter "
+            "(defaults to the current working directory)."
+        ),
+    )
     return parser
 
 
@@ -255,7 +284,29 @@ def main(argv: Iterable[str] | None = None) -> int:
     if args.port is not None:
         server_kwargs["port"] = args.port
 
-    server = create_server(**server_kwargs)
+    try:
+        default_root = _resolve_root(args.root) if args.root is not None else None
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    server = create_server(default_root=default_root, **server_kwargs)
+
+    if args.transport == "stdio":
+        message = "repomap-mcp awaiting MCP client handshake on stdio"
+    elif args.transport == "sse":
+        mount_path = args.mount_path or server.settings.mount_path
+        message = (
+            "repomap-mcp serving SSE transport at "
+            f"http://{server.settings.host}:{server.settings.port}{mount_path}"
+        )
+    else:
+        message = (
+            "repomap-mcp serving streamable HTTP transport at "
+            f"http://{server.settings.host}:{server.settings.port}{server.settings.streamable_http_path}"
+        )
+    if default_root is not None:
+        message = f"{message} (default repository root: {default_root})"
+    print(message, file=sys.stderr)
 
     if args.transport == "stdio":
         anyio.run(server.run_stdio_async)
